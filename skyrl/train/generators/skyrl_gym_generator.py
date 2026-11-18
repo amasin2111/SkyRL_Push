@@ -772,11 +772,12 @@ class SkyRLGymGenerator(GeneratorInterface):
         truncated_logprobs: Optional[List[List[float]]] = [] if logprobs is not None else None
         truncated_indices: Optional[List] = [] if raw_rollout_expert_indices is not None else None
 
-        for i, (output, response, env, env_class) in enumerate(zip(outputs, responses, envs, env_classes)):
-            # step on environment and compute reward
-            env_step_output: BaseTextEnvStepOutput = await self._run_in_executor_if_available(env.step, output)
-            reward = env_step_output["reward"]
-            rewards.append(reward)
+        env_step_outputs = await asyncio.gather(
+            *[self._run_in_executor_if_available(env.step, output) for env, output in zip(envs, outputs)]
+        )
+
+        for i, (env_step_output, response, env) in enumerate(zip(env_step_outputs, responses, envs)):
+            rewards.append(env_step_output["reward"])
 
             if len(response) > max_tokens:
                 response = response[:max_tokens]
@@ -790,10 +791,9 @@ class SkyRLGymGenerator(GeneratorInterface):
                 prompt_len = len(prompt_token_ids[i])
                 truncated_indices.append(sample_indices[: prompt_len + len(response)])
 
-            # Get environment-specific metrics
             env_metrics.append(env.get_metrics())
-            # Close the environment
-            await self._run_in_executor_if_available(env.close)
+
+        await asyncio.gather(*[self._run_in_executor_if_available(env.close) for env in envs])
 
         rollout_metrics = get_rollout_metrics(truncated_responses, rewards, env_metrics, env_classes, loss_masks)
 
