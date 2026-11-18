@@ -583,11 +583,12 @@ def handle_filter_sampling(
             }
         )
     else:
-        collected_state["collected_generator_output"] = concatenate_generator_outputs(
-            [collected_state["collected_generator_output"], filtered_output]
-        )
-        collected_state["collected_uids"].extend(filtered_uids)
-        collected_state["num_prompts_in_batch"] += len(kept_uids)
+        if kept_traj_idxs:
+            collected_state["collected_generator_output"] = concatenate_generator_outputs(
+                [collected_state["collected_generator_output"], filtered_output]
+            )
+            collected_state["collected_uids"].extend(filtered_uids)
+            collected_state["num_prompts_in_batch"] += len(kept_uids)
 
     # Check if we have enough prompts
     if collected_state["num_prompts_in_batch"] < target_batch_size:
